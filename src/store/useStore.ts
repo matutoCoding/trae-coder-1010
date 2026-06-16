@@ -36,6 +36,9 @@ interface AppState {
   alerts: Alert[]
   hourlyFlow: typeof mockHourlyFlow
   sidebarCollapsed: boolean
+  alertStatusFilter: string
+  alertTypeFilter: string
+  alertHandlerFilter: string
 
   setTrailStatus: (id: string, status: Trail["status"]) => void
   addSnowMaker: (data: Omit<SnowMaker, "id">) => void
@@ -46,6 +49,9 @@ interface AppState {
   resolveAlert: (id: string, handler: string, notes: string) => void
   scanTicket: (code: string, gate: string) => TicketScanResult
   setSidebarCollapsed: (v: boolean) => void
+  setAlertStatusFilter: (v: string) => void
+  setAlertTypeFilter: (v: string) => void
+  setAlertHandlerFilter: (v: string) => void
   resetAllData: () => void
 }
 
@@ -68,6 +74,9 @@ export const useStore = create<AppState>()(
       alerts: mockAlerts,
       hourlyFlow: mockHourlyFlow,
       sidebarCollapsed: false,
+      alertStatusFilter: "全部",
+      alertTypeFilter: "全部",
+      alertHandlerFilter: "全部",
 
       setTrailStatus: (id, status) =>
         set((state) => ({
@@ -179,6 +188,9 @@ export const useStore = create<AppState>()(
       },
 
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+      setAlertStatusFilter: (v) => set({ alertStatusFilter: v }),
+      setAlertTypeFilter: (v) => set({ alertTypeFilter: v }),
+      setAlertHandlerFilter: (v) => set({ alertHandlerFilter: v }),
 
       resetAllData: () =>
         set({
@@ -198,6 +210,9 @@ export const useStore = create<AppState>()(
         snowPlans: state.snowPlans,
         alerts: state.alerts,
         sidebarCollapsed: state.sidebarCollapsed,
+        alertStatusFilter: state.alertStatusFilter,
+        alertTypeFilter: state.alertTypeFilter,
+        alertHandlerFilter: state.alertHandlerFilter,
       }),
     }
   )

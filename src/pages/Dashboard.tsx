@@ -1,16 +1,38 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useStore } from "@/store/useStore"
-import { AlertTriangle, ShieldAlert, CloudSun, Info, Users, Snowflake, Mountain, CableCar, CheckCircle, Clock, X } from "lucide-react"
+import {
+  AlertTriangle,
+  ShieldAlert,
+  CloudSun,
+  Info,
+  Users,
+  Snowflake,
+  Mountain,
+  CableCar,
+  CheckCircle,
+  Clock,
+  X,
+  AlertCircle,
+  Lightbulb,
+  Filter,
+  FileText,
+  RotateCcw,
+  Snowflake as SnowflakeIcon,
+  Pause,
+  Play,
+  TrendingUp,
+} from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import type { Alert, SnowMaker } from "@/types"
 
-const alertIcons = {
+const alertIcons: Record<string, React.ReactNode> = {
   fault: <AlertTriangle className="w-4 h-4 text-orange-400" />,
   safety: <ShieldAlert className="w-4 h-4 text-red-400" />,
   weather: <CloudSun className="w-4 h-4 text-yellow-400" />,
   info: <Info className="w-4 h-4 text-sky-400" />,
 }
 
-const alertBg = {
+const alertBg: Record<string, string> = {
   fault: "border-orange-500/30 bg-orange-500/5",
   safety: "border-red-500/30 bg-red-500/5",
   weather: "border-yellow-500/30 bg-yellow-500/5",
@@ -24,6 +46,30 @@ const statusCfg: Record<string, { label: string; color: string }> = {
   maintain: { label: "维护中", color: "#fbbf24" },
 }
 
+const planStatusCfg: Record<string, { label: string; color: string }> = {
+  active: { label: "进行中", color: "#34d399" },
+  planned: { label: "已计划", color: "#38bdf8" },
+  completed: { label: "已完成", color: "#6b7280" },
+  cancelled: { label: "已取消", color: "#ef4444" },
+}
+
+const STATUS_FILTER = ["全部", "待处理", "已处理"]
+const TYPE_FILTER = ["全部", "fault", "safety", "weather", "info"]
+
+const handlerLabel: Record<string, string> = {
+  fault: "设备故障",
+  safety: "安全告警",
+  weather: "气象告警",
+  info: "系统通知",
+}
+
+interface MakerDetail {
+  maker: SnowMaker
+  trail: ReturnType<typeof useStore.getState>["trails"][number] | undefined
+  relatedPlans: ReturnType<typeof useStore.getState>["snowPlans"]
+  relatedMakers: SnowMaker[]
+}
+
 export default function Dashboard() {
   const hourlyFlow = useStore((s) => s.hourlyFlow)
   const snowMakers = useStore((s) => s.snowMakers)
@@ -32,19 +78,62 @@ export default function Dashboard() {
   const alerts = useStore((s) => s.alerts)
   const snowPlans = useStore((s) => s.snowPlans)
   const resolveAlert = useStore((s) => s.resolveAlert)
+  const alertStatusFilter = useStore((s) => s.alertStatusFilter)
+  const alertTypeFilter = useStore((s) => s.alertTypeFilter)
+  const alertHandlerFilter = useStore((s) => s.alertHandlerFilter)
+  const setAlertStatusFilter = useStore((s) => s.setAlertStatusFilter)
+  const setAlertTypeFilter = useStore((s) => s.setAlertTypeFilter)
+  const setAlertHandlerFilter = useStore((s) => s.setAlertHandlerFilter)
 
-  const [tab, setTab] = useState<"unresolved" | "resolved">("unresolved")
   const [selectedMaker, setSelectedMaker] = useState<string | null>(null)
   const [resolveModal, setResolveModal] = useState<string | null>(null)
   const [handlerName, setHandlerName] = useState("")
   const [handlerNotes, setHandlerNotes] = useState("")
+  const [showAlertFilter, setShowAlertFilter] = useState(false)
 
   const totalVisitors = hourlyFlow.reduce((sum, h) => sum + h.count, 0)
   const runningMakers = snowMakers.filter((s) => s.status === "running").length
   const openTrails = trails.filter((t) => t.status === "open").length
   const runningLifts = lifts.filter((l) => l.status === "running").length
-  const unresolved = alerts.filter((a) => !a.resolved)
-  const resolved = alerts.filter((a) => a.resolved)
+
+  const today = new Date().toLocaleDateString("zh-CN")
+  const filteredAlerts = useMemo(() => {
+    return alerts.filter((a) => {
+      if (alertStatusFilter === "待处理" && a.resolved) return false
+      if (alertStatusFilter === "已处理" && !a.resolved) return false
+      if (alertTypeFilter !== "全部" && a.type !== alertTypeFilter) return false
+      if (alertHandlerFilter !== "全部" && a.resolvedBy !== alertHandlerFilter) return false
+      return true
+    })
+  }, [alerts, alertStatusFilter, alertTypeFilter, alertHandlerFilter])
+
+  const unresolved = filteredAlerts.filter((a) => !a.resolved)
+  const resolved = filteredAlerts.filter((a) => a.resolved)
+
+  const todayResolved = resolved.filter((a) => a.resolvedAt?.startsWith(today))
+  const todaySummary = useMemo(() => {
+    const byType: Record<string, number> = {}
+    const byHandler: Record<string, number> = {}
+    todayResolved.forEach((a) => {
+      byType[a.type] = (byType[a.type] || 0) + 1
+      if (a.resolvedBy) byHandler[a.resolvedBy] = (byHandler[a.resolvedBy] || 0) + 1
+    })
+    return { byType, byHandler, total: todayResolved.length }
+  }, [todayResolved])
+
+  const unresolvedByType = useMemo(() => {
+    const result: Record<string, number> = {}
+    unresolved.forEach((a) => {
+      result[a.type] = (result[a.type] || 0) + 1
+    })
+    return result
+  }, [unresolved])
+
+  const handlerOptions = useMemo(() => {
+    const handlers = new Set<string>()
+    alerts.filter((a) => a.resolved && a.resolvedBy).forEach((a) => a.resolvedBy && handlers.add(a.resolvedBy))
+    return ["全部", ...Array.from(handlers)]
+  }, [alerts])
 
   const kpis = [
     { label: "今日客流", value: totalVisitors, icon: <Users className="w-5 h-5" /> },
@@ -56,18 +145,75 @@ export default function Dashboard() {
   const makerColor = (s: string) =>
     s === "running" ? "#34d399" : s === "fault" ? "#f87171" : s === "maintain" ? "#fbbf24" : "#9ca3af"
 
-  const liftColor = (s: string) =>
-    s === "running" ? "#34d399" : "#f87171"
+  const liftColor = (s: string) => (s === "running" ? "#34d399" : "#f87171")
 
-  const selectedMakerData = selectedMaker ? snowMakers.find((m) => m.id === selectedMaker) : null
-  const selectedTrail = selectedMakerData ? trails.find((t) => t.name === selectedMakerData.trail) : null
-  const relatedPlans = selectedMakerData ? snowPlans.filter((p) => p.snowMakers.includes(selectedMakerData.id) && p.status !== "cancelled") : []
+  const makerDetail = useMemo<MakerDetail | null>(() => {
+    if (!selectedMaker) return null
+    const maker = snowMakers.find((m) => m.id === selectedMaker)
+    if (!maker) return null
+    const trail = trails.find((t) => t.name === maker.trail)
+    const relatedPlans = snowPlans.filter(
+      (p) => p.snowMakers.includes(maker.id) && p.status !== "cancelled"
+    )
+    const relatedMakers = relatedPlans.length > 0
+      ? snowMakers.filter((m) => m.id !== maker.id && relatedPlans.some((p) => p.snowMakers.includes(m.id)))
+      : []
+    return { maker, trail, relatedPlans, relatedMakers }
+  }, [selectedMaker, snowMakers, trails, snowPlans])
 
   const handleResolve = (id: string) => {
     resolveAlert(id, handlerName || "管理员", handlerNotes)
     setResolveModal(null)
     setHandlerName("")
     setHandlerNotes("")
+  }
+
+  const getSuggestion = (detail: MakerDetail) => {
+    if (!detail.trail) return null
+    if (detail.trail.status === "closed") {
+      const hasActivePlan = detail.relatedPlans.some((p) => p.status === "active")
+      const hasPlannedPlan = detail.relatedPlans.some((p) => p.status === "planned")
+      const makersRunning = detail.relatedMakers.filter((m) => m.status === "running")
+      const makerRunning = detail.maker.status === "running"
+
+      if (hasActivePlan || makerRunning || makersRunning.length > 0) {
+        return {
+          level: "warning" as const,
+          title: "⚠️ 雪道已关闭，建议暂停造雪",
+          actions: [
+            `雪道当前状态: 已关闭`,
+            hasActivePlan ? "• 存在进行中的造雪计划，建议取消" : "",
+            makerRunning ? `• 造雪机${detail.maker.name}正在运行，建议停机` : "",
+            makersRunning.length > 0 ? `• 同区域${makersRunning.length}台造雪机在运行，建议评估` : "",
+            hasPlannedPlan ? "• 后续造雪计划需确认雪道开放安排" : "",
+          ].filter(Boolean),
+        }
+      }
+    }
+    if (detail.trail.status === "grooming") {
+      return {
+        level: "info" as const,
+        title: "ℹ️ 雪道压雪中，建议配合安排",
+        actions: [
+          `雪道当前状态: 压雪中`,
+          detail.maker.status === "running" ? "• 造雪机运行中，压雪完成后可形成优质雪面" : "• 造雪机待机中，可安排造雪",
+          detail.relatedPlans.length > 0 ? `• 关联${detail.relatedPlans.length}个造雪计划` : "• 建议安排造雪计划以维持雪量",
+        ],
+      }
+    }
+    if (detail.trail.status === "open" && detail.relatedPlans.length === 0) {
+      return {
+        level: "info" as const,
+        title: "💡 雪道开放，建议关注造雪安排",
+        actions: [
+          `雪道当前状态: 开放`,
+          `当前雪厚: ${detail.trail.snowDepth}cm`,
+          detail.trail.snowDepth < 40 ? "• ⚠️ 雪量不足40cm，建议安排造雪" : "• 雪量充足",
+          "• 暂无关联造雪计划，请关注天气",
+        ],
+      }
+    }
+    return null
   }
 
   return (
@@ -104,42 +250,140 @@ export default function Dashboard() {
         </div>
 
         <div className="glow-card overflow-hidden">
-          <div className="flex items-center gap-1 mb-3 border-b border-ice-500/20">
-            <button onClick={() => setTab("unresolved")} className={`flex-1 text-xs py-2 font-medium transition-colors ${tab === "unresolved" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}>
-              待处理 ({unresolved.length})
-            </button>
-            <button onClick={() => setTab("resolved")} className={`flex-1 text-xs py-2 font-medium transition-colors ${tab === "resolved" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}>
-              已处理 ({resolved.length})
+          <div className="flex items-center justify-between mb-3 border-b border-ice-500/20">
+            <div className="flex items-center gap-1 flex-1">
+              <button
+                onClick={() => setAlertStatusFilter("待处理")}
+                className={`flex-1 text-xs py-2 font-medium transition-colors ${alertStatusFilter === "待处理" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}
+              >
+                待处理 ({unresolved.length})
+              </button>
+              <button
+                onClick={() => setAlertStatusFilter("已处理")}
+                className={`flex-1 text-xs py-2 font-medium transition-colors ${alertStatusFilter === "已处理" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}
+              >
+                已处理 ({resolved.length})
+              </button>
+            </div>
+            <button
+              onClick={() => setShowAlertFilter(!showAlertFilter)}
+              className="ml-2 text-ice-300/40 hover:text-ice-300 p-1"
+            >
+              <Filter className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-            {tab === "unresolved" && unresolved.length === 0 && (
-              <div className="text-ice-300/40 text-xs text-center py-8">暂无待处理告警</div>
+
+          {showAlertFilter && (
+            <div className="p-2 mb-2 border-b border-ice-500/10 space-y-2">
+              <div className="flex gap-2">
+                <select
+                  value={alertTypeFilter}
+                  onChange={(e) => setAlertTypeFilter(e.target.value)}
+                  className="flex-1 px-2 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-[10px] text-ice-100 focus:outline-none"
+                >
+                  {TYPE_FILTER.map((t) => (
+                    <option key={t} value={t}>{t === "全部" ? "全部类型" : handlerLabel[t]}</option>
+                  ))}
+                </select>
+                {alertStatusFilter === "已处理" && (
+                  <select
+                    value={alertHandlerFilter}
+                    onChange={(e) => setAlertHandlerFilter(e.target.value)}
+                    className="flex-1 px-2 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-[10px] text-ice-100 focus:outline-none"
+                  >
+                    {handlerOptions.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-ice-300/40">
+                <span>筛选后 {filteredAlerts.length} 条（共 {alerts.length}）</span>
+                {(alertTypeFilter !== "全部" || alertHandlerFilter !== "全部") && (
+                  <button
+                    onClick={() => {
+                      setAlertTypeFilter("全部")
+                      setAlertHandlerFilter("全部")
+                    }}
+                    className="text-ice-400 hover:text-ice-300 flex items-center gap-0.5"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />重置
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {alertStatusFilter === "已处理" && todayResolved.length > 0 && (
+            <div className="mb-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+              <div className="text-[10px] text-emerald-400 font-medium flex items-center gap-1 mb-1">
+                <FileText className="w-3 h-3" />今日处理摘要 ({todaySummary.total}条)
+              </div>
+              <div className="text-[10px] text-emerald-300/70 flex flex-wrap gap-x-3 gap-y-0.5">
+                {Object.entries(todaySummary.byType).map(([type, count]) => (
+                  <span key={type}>{handlerLabel[type]} {count}条</span>
+                ))}
+              </div>
+              {Object.keys(todaySummary.byHandler).length > 0 && (
+                <div className="text-[10px] text-emerald-300/50 mt-0.5">
+                  处理人：{Object.entries(todaySummary.byHandler).map(([h, c]) => `${h} ${c}条`).join("，")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {alertStatusFilter === "待处理" && unresolvedByType && Object.keys(unresolvedByType).length > 0 && (
+            <div className="mb-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+              <div className="text-[10px] text-amber-400 font-medium flex items-center gap-1 mb-1">
+                <AlertCircle className="w-3 h-3" />待处理汇总
+              </div>
+              <div className="text-[10px] text-amber-300/70 flex flex-wrap gap-x-3 gap-y-0.5">
+                {Object.entries(unresolvedByType).map(([type, count]) => (
+                  <span key={type}>{handlerLabel[type]} {count}条</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+            {alertStatusFilter === "待处理" && unresolved.length === 0 && (
+              <div className="text-ice-300/40 text-xs text-center py-6">暂无待处理告警</div>
             )}
-            {tab === "unresolved" && unresolved.map((a) => (
+            {alertStatusFilter === "待处理" && unresolved.map((a) => (
               <div key={a.id} className={`rounded-lg border p-2.5 flex items-start gap-2 ${alertBg[a.type]}`}>
                 <div className="mt-0.5 shrink-0">{alertIcons[a.type]}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-ice-100 truncate">{a.title}</div>
                   <div className="text-[10px] text-ice-300/50 mt-0.5 truncate">{a.message}</div>
-                  <div className="text-[10px] text-ice-300/30 mt-0.5 flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{a.timestamp}</div>
+                  <div className="text-[10px] text-ice-300/30 mt-0.5 flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />{a.timestamp}
+                  </div>
                 </div>
-                <button onClick={() => { setResolveModal(a.id); setHandlerName(""); setHandlerNotes("") }} className="shrink-0 text-[10px] px-2 py-1 rounded bg-ice-500/20 text-ice-300 hover:bg-ice-500/30 transition-colors">
+                <button
+                  onClick={() => { setResolveModal(a.id); setHandlerName(""); setHandlerNotes("") }}
+                  className="shrink-0 text-[10px] px-2 py-1 rounded bg-ice-500/20 text-ice-300 hover:bg-ice-500/30 transition-colors"
+                >
                   处理
                 </button>
               </div>
             ))}
-            {tab === "resolved" && resolved.length === 0 && (
-              <div className="text-ice-300/40 text-xs text-center py-8">暂无已处理告警</div>
+            {alertStatusFilter === "已处理" && resolved.length === 0 && (
+              <div className="text-ice-300/40 text-xs text-center py-6">暂无已处理告警</div>
             )}
-            {tab === "resolved" && resolved.map((a) => (
-              <div key={a.id} className="rounded-lg border border-gray-600/30 bg-gray-700/10 p-2.5 flex items-start gap-2 opacity-70">
+            {alertStatusFilter === "已处理" && resolved.map((a) => (
+              <div key={a.id} className="rounded-lg border border-gray-600/30 bg-gray-700/10 p-2.5 flex items-start gap-2 opacity-80">
                 <div className="mt-0.5 shrink-0"><CheckCircle className="w-4 h-4 text-gray-400" /></div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-gray-300 truncate">{a.title}</div>
                   <div className="text-[10px] text-gray-400/70 mt-0.5 truncate">{a.message}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{a.resolvedAt} · {a.resolvedBy}</div>
-                  {a.resolvedNotes && <div className="text-[10px] text-gray-400 mt-1 bg-gray-700/30 rounded px-1.5 py-1">备注: {a.resolvedNotes}</div>}
+                  <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />{a.resolvedAt} · {a.resolvedBy}
+                  </div>
+                  {a.resolvedNotes && (
+                    <div className="text-[10px] text-gray-400 mt-1 bg-gray-700/30 rounded px-1.5 py-1">
+                      备注: {a.resolvedNotes}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -152,15 +396,29 @@ export default function Dashboard() {
           <div className="glow-card w-96 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-ice-200">处理告警</h3>
-              <button onClick={() => setResolveModal(null)} className="text-ice-300/40 hover:text-ice-300"><X className="w-4 h-4" /></button>
+              <button onClick={() => setResolveModal(null)} className="text-ice-300/40 hover:text-ice-300">
+                <X className="w-4 h-4" />
+              </button>
             </div>
             <div>
               <label className="text-xs text-ice-300/60 mb-1 block">处理人</label>
-              <input type="text" value={handlerName} onChange={(e) => setHandlerName(e.target.value)} placeholder="输入处理人姓名" className="w-full px-3 py-2 bg-gray-900/60 border border-ice-500/20 rounded-lg text-sm text-ice-100 placeholder:text-ice-300/30 focus:outline-none focus:border-ice-400/50" />
+              <input
+                type="text"
+                value={handlerName}
+                onChange={(e) => setHandlerName(e.target.value)}
+                placeholder="输入处理人姓名（默认：管理员）"
+                className="w-full px-3 py-2 bg-gray-900/60 border border-ice-500/20 rounded-lg text-sm text-ice-100 placeholder:text-ice-300/30 focus:outline-none focus:border-ice-400/50"
+              />
             </div>
             <div>
               <label className="text-xs text-ice-300/60 mb-1 block">处理备注</label>
-              <textarea value={handlerNotes} onChange={(e) => setHandlerNotes(e.target.value)} placeholder="描述处理措施..." rows={3} className="w-full px-3 py-2 bg-gray-900/60 border border-ice-500/20 rounded-lg text-sm text-ice-100 placeholder:text-ice-300/30 focus:outline-none focus:border-ice-400/50 resize-none" />
+              <textarea
+                value={handlerNotes}
+                onChange={(e) => setHandlerNotes(e.target.value)}
+                placeholder="描述处理措施和结果..."
+                rows={3}
+                className="w-full px-3 py-2 bg-gray-900/60 border border-ice-500/20 rounded-lg text-sm text-ice-100 placeholder:text-ice-300/30 focus:outline-none focus:border-ice-400/50 resize-none"
+              />
             </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setResolveModal(null)} className="px-4 py-2 text-xs text-ice-300/60 hover:text-ice-300 transition-colors">取消</button>
@@ -219,44 +477,93 @@ export default function Dashboard() {
             </g>
           </svg>
 
-          {selectedMakerData && (
-            <div className="absolute top-4 right-4 glow-card p-3 text-xs space-y-2 min-w-[200px] max-w-[240px]">
+          {makerDetail && (
+            <div className="absolute top-4 right-4 glow-card p-3 text-xs space-y-2 min-w-[240px] max-w-[300px]">
               <div className="flex items-center justify-between">
-                <span className="text-ice-200 font-semibold">{selectedMakerData.name}</span>
-                <button onClick={() => setSelectedMaker(null)} className="text-ice-300/40 hover:text-ice-300"><X className="w-3.5 h-3.5" /></button>
+                <span className="text-ice-200 font-semibold">{makerDetail.maker.name}</span>
+                <button onClick={() => setSelectedMaker(null)} className="text-ice-300/40 hover:text-ice-300">
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
+
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ background: makerColor(selectedMakerData.status) }} />
-                <span style={{ color: makerColor(selectedMakerData.status) }}>{statusCfg[selectedMakerData.status].label}</span>
+                <span className="w-2 h-2 rounded-full" style={{ background: makerColor(makerDetail.maker.status) }} />
+                <span style={{ color: makerColor(makerDetail.maker.status) }}>{statusCfg[makerDetail.maker.status].label}</span>
                 <span className="text-ice-300/40 mx-1">·</span>
-                <span className="text-ice-300/60">{selectedMakerData.model}</span>
+                <span className="text-ice-300/60">{makerDetail.maker.model}</span>
               </div>
+
               <div className="text-ice-300/60">
-                所属雪道：<span className="text-ice-200">{selectedMakerData.trail}</span>
-                {selectedTrail && (
-                  <span className={`ml-1.5 px-1 py-0.5 rounded text-[10px] ${selectedTrail.status === "open" ? "bg-emerald-500/20 text-emerald-400" : selectedTrail.status === "grooming" ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"}`}>
-                    {selectedTrail.status === "open" ? "开放" : selectedTrail.status === "grooming" ? "压雪中" : "已关闭"}
+                所属雪道：
+                <span className="text-ice-200 font-medium">{makerDetail.maker.trail}</span>
+                {makerDetail.trail && (
+                  <span className={`ml-1.5 px-1 py-0.5 rounded text-[10px] ${
+                    makerDetail.trail.status === "open" ? "bg-emerald-500/20 text-emerald-400" :
+                    makerDetail.trail.status === "grooming" ? "bg-amber-500/20 text-amber-400" :
+                    "bg-red-500/20 text-red-400"
+                  }`}>
+                    {makerDetail.trail.status === "open" ? "开放" : makerDetail.trail.status === "grooming" ? "压雪中" : "已关闭"}
                   </span>
                 )}
               </div>
-              {selectedTrail && selectedTrail.status === "closed" && relatedPlans.length > 0 && (
-                <div className="p-1.5 rounded bg-red-500/10 border border-red-500/20 text-red-300 text-[10px]">
-                  ⚠ 雪道已关闭，{relatedPlans.length}个关联造雪计划需关注
+
+              {makerDetail.trail && (
+                <div className="text-[10px] text-ice-300/60 flex items-center gap-1.5">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  雪厚 {makerDetail.trail.snowDepth}cm · 长度 {makerDetail.trail.length}m
                 </div>
               )}
-              {relatedPlans.length > 0 && (
+
+              {makerDetail.relatedMakers.length > 0 && (
+                <div className="text-[10px] text-ice-300/60">
+                  同区域造雪机：{makerDetail.relatedMakers.map((m) => (
+                    <span key={m.id} className="mr-1" style={{ color: makerColor(m.status) }}>
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {makerDetail.relatedPlans.length > 0 && (
                 <div className="space-y-1">
-                  <div className="text-ice-300/40">关联计划：</div>
-                  {relatedPlans.map((p) => (
+                  <div className="text-ice-300/40 flex items-center gap-1">
+                    <SnowflakeIcon className="w-2.5 h-2.5" />关联造雪计划 ({makerDetail.relatedPlans.length})
+                  </div>
+                  {makerDetail.relatedPlans.map((p) => (
                     <div key={p.id} className="flex items-center gap-1.5 text-[10px]">
-                      <span className={`px-1 py-0.5 rounded ${p.status === "active" ? "bg-emerald-500/20 text-emerald-400" : p.status === "planned" ? "bg-ice-500/20 text-ice-400" : "bg-gray-500/20 text-gray-400"}`}>
-                        {p.status === "active" ? "进行中" : p.status === "planned" ? "已计划" : "已完成"}
+                      <span className={`px-1 py-0.5 rounded ${
+                        p.status === "active" ? "bg-emerald-500/20 text-emerald-400" :
+                        p.status === "planned" ? "bg-ice-500/20 text-ice-400" :
+                        "bg-gray-500/20 text-gray-400"
+                      }`}>
+                        {planStatusCfg[p.status].label}
                       </span>
                       <span className="text-ice-300/50">{p.date} {p.startTime}-{p.endTime}</span>
+                      {p.status === "active" && <Play className="w-2.5 h-2.5 text-emerald-400" />}
+                      {p.status === "planned" && <Pause className="w-2.5 h-2.5 text-ice-400" />}
                     </div>
                   ))}
                 </div>
               )}
+
+              {(() => {
+                const suggestion = getSuggestion(makerDetail)
+                if (!suggestion) return null
+                return (
+                  <div className={`p-2 rounded border ${
+                    suggestion.level === "warning" ? "bg-red-500/10 border-red-500/30" : "bg-ice-500/10 border-ice-500/30"
+                  }`}>
+                    <div className={`text-[10px] font-medium mb-1 flex items-center gap-1 ${
+                      suggestion.level === "warning" ? "text-red-400" : "text-ice-400"
+                    }`}>
+                      <Lightbulb className="w-2.5 h-2.5" />{suggestion.title}
+                    </div>
+                    <div className="text-[10px] text-ice-300/60 space-y-0.5">
+                      {suggestion.actions.map((a, i) => a && <div key={i}>{a}</div>)}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
         </div>
