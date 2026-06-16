@@ -49,10 +49,13 @@ export interface Lift {
 
 export interface TicketRecord {
   id: string
+  code: string
   type: "full_day" | "half_day" | "hour"
   timestamp: string
   gate: string
   status: "valid" | "used" | "expired"
+  usedAt?: string
+  usedGate?: string
 }
 
 export interface RentalItem {
@@ -100,6 +103,8 @@ export interface Alert {
   message: string
   timestamp: string
   resolved: boolean
+  resolvedAt?: string
+  resolvedBy?: string
 }
 
 export interface HourlyFlow {

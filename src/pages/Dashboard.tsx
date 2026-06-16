@@ -1,11 +1,12 @@
+import { useState } from "react"
 import { useStore } from "@/store/useStore"
-import { AlertTriangle, Shield, Cloud, Info, Users, Snowflake, Mountain, CableCar } from "lucide-react"
+import { AlertTriangle, ShieldAlert, CloudSun, Info, Users, Snowflake, Mountain, CableCar, CheckCircle, Clock } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 
 const alertIcons = {
   fault: <AlertTriangle className="w-4 h-4 text-orange-400" />,
-  safety: <Shield className="w-4 h-4 text-red-400" />,
-  weather: <Cloud className="w-4 h-4 text-yellow-400" />,
+  safety: <ShieldAlert className="w-4 h-4 text-red-400" />,
+  weather: <CloudSun className="w-4 h-4 text-yellow-400" />,
   info: <Info className="w-4 h-4 text-sky-400" />,
 }
 
@@ -23,12 +24,14 @@ export default function Dashboard() {
   const lifts = useStore((s) => s.lifts)
   const alerts = useStore((s) => s.alerts)
   const resolveAlert = useStore((s) => s.resolveAlert)
+  const [tab, setTab] = useState<"unresolved" | "resolved">("unresolved")
 
   const totalVisitors = hourlyFlow.reduce((sum, h) => sum + h.count, 0)
   const runningMakers = snowMakers.filter((s) => s.status === "running").length
   const openTrails = trails.filter((t) => t.status === "open").length
   const runningLifts = lifts.filter((l) => l.status === "running").length
   const unresolved = alerts.filter((a) => !a.resolved)
+  const resolved = alerts.filter((a) => a.resolved)
 
   const kpis = [
     { label: "今日客流", value: totalVisitors, icon: <Users className="w-5 h-5" /> },
@@ -82,17 +85,33 @@ export default function Dashboard() {
         </div>
 
         <div className="glow-card overflow-hidden">
-          <h3 className="text-sm font-medium text-ice-300/70 mb-3">待处理告警</h3>
+          <div className="flex items-center gap-1 mb-3 border-b border-ice-500/20">
+            <button
+              onClick={() => setTab("unresolved")}
+              className={`flex-1 text-xs py-2 font-medium transition-colors ${tab === "unresolved" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}
+            >
+              待处理 ({unresolved.length})
+            </button>
+            <button
+              onClick={() => setTab("resolved")}
+              className={`flex-1 text-xs py-2 font-medium transition-colors ${tab === "resolved" ? "text-ice-300 border-b-2 border-ice-400" : "text-ice-300/40 hover:text-ice-300/70"}`}
+            >
+              已处理 ({resolved.length})
+            </button>
+          </div>
           <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-            {unresolved.length === 0 && (
-              <div className="text-ice-300/40 text-xs text-center py-8">暂无告警</div>
+            {tab === "unresolved" && unresolved.length === 0 && (
+              <div className="text-ice-300/40 text-xs text-center py-8">暂无待处理告警</div>
             )}
-            {unresolved.map((a) => (
+            {tab === "unresolved" && unresolved.map((a) => (
               <div key={a.id} className={`rounded-lg border p-2.5 flex items-start gap-2 ${alertBg[a.type]}`}>
                 <div className="mt-0.5 shrink-0">{alertIcons[a.type]}</div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-ice-100 truncate">{a.title}</div>
-                  <div className="text-[10px] text-ice-300/50 mt-0.5">{a.timestamp}</div>
+                  <div className="text-[10px] text-ice-300/50 mt-0.5 truncate">{a.message}</div>
+                  <div className="text-[10px] text-ice-300/30 mt-0.5 flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />{a.timestamp}
+                  </div>
                 </div>
                 <button
                   onClick={() => resolveAlert(a.id)}
@@ -100,6 +119,21 @@ export default function Dashboard() {
                 >
                   处理
                 </button>
+              </div>
+            ))}
+            {tab === "resolved" && resolved.length === 0 && (
+              <div className="text-ice-300/40 text-xs text-center py-8">暂无已处理告警</div>
+            )}
+            {tab === "resolved" && resolved.map((a) => (
+              <div key={a.id} className="rounded-lg border border-gray-600/30 bg-gray-700/10 p-2.5 flex items-start gap-2 opacity-70">
+                <div className="mt-0.5 shrink-0"><CheckCircle className="w-4 h-4 text-gray-400" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-gray-300 truncate">{a.title}</div>
+                  <div className="text-[10px] text-gray-400/70 mt-0.5 truncate">{a.message}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" />{a.resolvedAt} · {a.resolvedBy}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

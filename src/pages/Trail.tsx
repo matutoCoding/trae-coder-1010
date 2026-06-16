@@ -1,4 +1,4 @@
-import { Mountain, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Mountain, CheckCircle, XCircle, Clock, ChevronsRight } from "lucide-react"
 import {
   BarChart,
   Bar,
@@ -25,6 +25,13 @@ const statusCfg: Record<Trail["status"], { label: string; dot: string; icon: typ
   grooming: { label: "压雪中", dot: "bg-yellow-400", icon: Clock },
 }
 
+const statusCycle: Trail["status"][] = ["open", "closed", "grooming"]
+const nextStatusLabel: Record<Trail["status"], string> = {
+  open: "关闭",
+  closed: "压雪中",
+  grooming: "开放",
+}
+
 function depthColor(d: number) {
   if (d >= 50) return "#22c55e"
   if (d >= 30) return "#f59e0b"
@@ -33,7 +40,7 @@ function depthColor(d: number) {
 
 export default function Trail() {
   const trails = useStore((s) => s.trails)
-  const toggleTrailStatus = useStore((s) => s.toggleTrailStatus)
+  const setTrailStatus = useStore((s) => s.setTrailStatus)
 
   const counts = {
     open: trails.filter((t) => t.status === "open").length,
@@ -42,6 +49,12 @@ export default function Trail() {
   }
 
   const chartData = trails.map((t) => ({ name: t.name, depth: t.snowDepth }))
+
+  const cycleNext = (id: string, current: Trail["status"]) => {
+    const idx = statusCycle.indexOf(current)
+    const next = statusCycle[(idx + 1) % statusCycle.length]
+    setTrailStatus(id, next)
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -110,18 +123,42 @@ export default function Trail() {
                   长度 <span className="font-mono font-bold text-white">{t.length}</span> m
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-sm">
-                  <span className={`h-2 w-2 rounded-full ${st.dot}`} />
-                  <StatusIcon className="h-4 w-4 text-slate-400" />
-                  {st.label}
-                </span>
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className={`h-2 w-2 rounded-full ${st.dot}`} />
+                <StatusIcon className="h-4 w-4 text-slate-400" />
+                {st.label}
+              </div>
+
+              {/* ── Status Controls ── */}
+              <div className="space-y-2">
+                {/* Cycle Toggle Button */}
                 <button
-                  onClick={() => toggleTrailStatus(t.id)}
-                  className="rounded-lg border border-cyan-500/30 bg-cyan-900/40 px-3 py-1 text-xs text-cyan-300 transition hover:bg-cyan-700/50"
+                  onClick={() => cycleNext(t.id, t.status)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-900/40 px-3 py-1.5 text-xs text-cyan-300 transition hover:bg-cyan-700/50"
                 >
-                  {t.status === "open" ? "关闭雪道" : "开放雪道"}
+                  <ChevronsRight className="h-3.5 w-3.5" />
+                  切换至: {nextStatusLabel[t.status]}
                 </button>
+
+                {/* Explicit Status Button Group */}
+                <div className="flex gap-1">
+                  {statusCycle.map((s) => {
+                    const isActive = t.status === s
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => setTrailStatus(t.id, s)}
+                        className={`flex-1 rounded-md border px-2 py-1 text-[10px] transition ${
+                          isActive
+                            ? "border-cyan-400 bg-cyan-500/30 text-cyan-200"
+                            : "border-slate-600 bg-slate-800/50 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+                        }`}
+                      >
+                        {statusCfg[s].label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )

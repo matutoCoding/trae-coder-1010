@@ -87,12 +87,16 @@ export const mockTickets: TicketRecord[] = Array.from({ length: 50 }, (_, i) => 
   const minute = Math.floor(Math.random() * 60)
   const types: TicketRecord["type"][] = ["full_day", "half_day", "hour"]
   const gates = ["A闸机", "B闸机", "C闸机", "D闸机"]
+  const code = `SK${(20260000 + i).toString()}`
   return {
     id: `TK${(1000 + i).toString()}`,
+    code,
     type: types[Math.floor(Math.random() * types.length)],
     timestamp: `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
     gate: gates[Math.floor(Math.random() * gates.length)],
     status: i < 45 ? "used" : "valid",
+    usedAt: i < 45 ? `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}` : undefined,
+    usedGate: i < 45 ? gates[Math.floor(Math.random() * gates.length)] : undefined,
   }
 })
 
