@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+:root {
+  font-family: "Noto Sans SC", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: #0B1120;
+  color: #E0F2FE;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E3A5F;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0EA5E9;
+}
+
+@layer components {
+  .glow-card {
+    @apply bg-frost-card border border-frost-border rounded-xl p-4 transition-all duration-300;
+    box-shadow: 0 0 0 rgba(14, 165, 233, 0);
+  }
+  .glow-card:hover {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.3);
+  }
+  .glow-text {
+    text-shadow: 0 0 10px rgba(14, 165, 233, 0.5);
+  }
+  .status-dot {
+    @apply w-2 h-2 rounded-full inline-block;
+  }
+  .status-dot-green {
+    @apply status-dot bg-emerald-400;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+  }
+  .status-dot-red {
+    @apply status-dot bg-red-400;
+    box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+  }
+  .status-dot-yellow {
+    @apply status-dot bg-amber-400;
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+  }
+  .status-dot-gray {
+    @apply status-dot bg-gray-400;
+  }
+}
