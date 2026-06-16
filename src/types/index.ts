@@ -105,6 +105,7 @@ export interface Alert {
   resolved: boolean
   resolvedAt?: string
   resolvedBy?: string
+  resolvedNotes?: string
 }
 
 export interface HourlyFlow {

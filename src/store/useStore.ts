@@ -43,7 +43,7 @@ interface AppState {
   updateSnowMakerPosition: (id: string, x: number, y: number) => void
   addSnowPlan: (data: Omit<SnowPlan, "id">) => void
   updateSnowPlanStatus: (id: string, status: SnowPlan["status"]) => void
-  resolveAlert: (id: string) => void
+  resolveAlert: (id: string, handler: string, notes: string) => void
   scanTicket: (code: string, gate: string) => TicketScanResult
   setSidebarCollapsed: (v: boolean) => void
   resetAllData: () => void
@@ -126,7 +126,7 @@ export const useStore = create<AppState>()(
         })
       },
 
-      resolveAlert: (id) =>
+      resolveAlert: (id, handler, notes) =>
         set((state) => ({
           alerts: state.alerts.map((a) =>
             a.id === id
@@ -134,7 +134,8 @@ export const useStore = create<AppState>()(
                   ...a,
                   resolved: true,
                   resolvedAt: new Date().toLocaleString("zh-CN"),
-                  resolvedBy: "管理员",
+                  resolvedBy: handler || "管理员",
+                  resolvedNotes: notes || "",
                 }
               : a
           ),

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useStore } from "@/store/useStore"
-import { Ticket, Snowflake, HardHat, Shirt, CheckCircle, QrCode, XCircle, AlertTriangle, ChevronDown } from "lucide-react"
+import { Ticket, Snowflake, HardHat, Shirt, CheckCircle, QrCode, XCircle, AlertTriangle, ChevronDown, Search, Filter } from "lucide-react"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 import type { TicketRecord } from "@/types"
 
@@ -10,7 +10,9 @@ const typeGroupLabel: Record<string, string> = { ski: "双板", snowboard: "单�
 const statusStyle: Record<string, string> = { valid: "bg-emerald-500/20 text-emerald-400", used: "bg-slate-500/20 text-slate-400", expired: "bg-red-500/20 text-red-400", available: "bg-emerald-500/20 text-emerald-400", rented: "bg-amber-500/20 text-amber-400", maintenance: "bg-red-500/20 text-red-400" }
 const statusLabel: Record<string, string> = { valid: "有效", used: "已使用", expired: "已过期", available: "可用", rented: "已租出", maintenance: "维护中" }
 const PIE_COLORS = ["#0ea5e9", "#38bdf8", "#7dd3fc"]
-const GATE_OPTIONS = ["A闸机", "B闸机", "C闸机", "D闸机"]
+const GATE_OPTIONS = ["全部", "A闸机", "B闸机", "C闸机", "D闸机"]
+const STATUS_OPTIONS = ["全部", "valid", "used", "expired"]
+const TYPE_OPTIONS = ["全部", "full_day", "half_day", "hour"]
 
 type ScanResult =
   | { success: true; ticket: TicketRecord }
@@ -25,19 +27,66 @@ export default function TicketPage() {
   const [gate, setGate] = useState("A闸机")
   const [result, setResult] = useState<ScanResult | null>(null)
   const [gateOpen, setGateOpen] = useState(false)
+  const [scanHistory, setScanHistory] = useState<Array<{ code: string; type: string; time: string; gate: string; status: "success" | "duplicate" | "failed" }>>([])
 
-  const total = tickets.length
-  const usedCount = tickets.filter((t) => t.status === "used").length
-  const validCount = tickets.filter((t) => t.status === "valid").length
+  const [filterCode, setFilterCode] = useState("")
+  const [filterStatus, setFilterStatus] = useState("全部")
+  const [filterGate, setFilterGate] = useState("全部")
+  const [filterType, setFilterType] = useState("全部")
+  const [showFilter, setShowFilter] = useState(false)
 
-  const pieData = ["full_day", "half_day", "hour"].map((type) => ({ name: typeLabel[type], value: tickets.filter((t) => t.type === type).length }))
+  const sortedTickets = useMemo(() => {
+    return [...tickets].sort((a, b) => {
+      if (a.status === "used" && b.status !== "used") return -1
+      if (a.status !== "used" && b.status === "used") return 1
+      if (a.usedAt && b.usedAt) return b.usedAt.localeCompare(a.usedAt)
+      return 0
+    })
+  }, [tickets])
+
+  const filtered = useMemo(() => {
+    return sortedTickets.filter((t) => {
+      if (filterCode && !t.code.toLowerCase().includes(filterCode.toLowerCase()) && !t.id.toLowerCase().includes(filterCode.toLowerCase())) return false
+      if (filterStatus !== "全部" && t.status !== filterStatus) return false
+      if (filterGate !== "全部" && t.gate !== filterGate && t.usedGate !== filterGate) return false
+      if (filterType !== "全部" && t.type !== filterType) return false
+      return true
+    })
+  }, [sortedTickets, filterCode, filterStatus, filterGate, filterType])
+
+  const filteredTotal = filtered.length
+  const filteredUsed = filtered.filter((t) => t.status === "used").length
+  const filteredValid = filtered.filter((t) => t.status === "valid").length
+
+  const pieData = ["full_day", "half_day", "hour"].map((type) => ({ name: typeLabel[type], value: filtered.filter((t) => t.type === type).length }))
   const gates = [...new Set(tickets.map((t) => t.gate))]
-  const barData = gates.map((g) => ({ gate: g, revenue: tickets.filter((t) => t.gate === g).length * (150 + Math.floor(Math.random() * 200)) }))
+  const barData = gates.map((g) => ({ gate: g, revenue: filtered.filter((t) => t.gate === g).length * (150 + Math.floor(Math.random() * 200)) }))
   const rentalsByType = (["ski", "snowboard", "helmet", "suit"] as const).map((type) => ({ type, label: typeGroupLabel[type], items: rentals.filter((r) => r.type === type) }))
 
   const handleScan = () => {
     if (!code.trim()) return
-    setResult(scanTicket(code.trim(), gate))
+    const scanResult = scanTicket(code.trim(), gate)
+    setResult(scanResult)
+
+    if (scanResult.success) {
+      setScanHistory((prev) => [{
+        code: scanResult.ticket.code,
+        type: typeLabel[scanResult.ticket.type],
+        time: scanResult.ticket.usedAt || new Date().toLocaleString("zh-CN"),
+        gate,
+        status: "success",
+      }, ...prev])
+    } else {
+      const errorResult = scanResult as { success: false; error: string; ticket?: TicketRecord }
+      setScanHistory((prev) => [{
+        code: code.trim(),
+        type: errorResult.ticket ? typeLabel[errorResult.ticket.type] : "-",
+        time: new Date().toLocaleString("zh-CN"),
+        gate,
+        status: errorResult.error === "already_used" ? "duplicate" : "failed",
+      }, ...prev])
+    }
+    setCode("")
   }
 
   const renderResult = () => {
@@ -108,7 +157,7 @@ export default function TicketPage() {
             </button>
             {gateOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-gray-900/95 border border-ice-500/20 rounded-lg overflow-hidden z-10">
-                {GATE_OPTIONS.map((g) => (
+                {GATE_OPTIONS.filter((g) => g !== "全部").map((g) => (
                   <button key={g} onClick={() => { setGate(g); setGateOpen(false) }} className={`w-full px-4 py-2 text-left text-sm hover:bg-ice-500/10 transition-colors ${gate === g ? "text-ice-400 bg-ice-500/10" : "text-ice-100"}`}>{g}</button>
                 ))}
               </div>
@@ -122,8 +171,42 @@ export default function TicketPage() {
         <div className="mt-3 text-[10px] text-ice-300/30">测试票号: SK20260045, SK20260046, SK20260047, SK20260048, SK20260049</div>
       </div>
 
+      {scanHistory.length > 0 && (
+        <div className="glow-card">
+          <h3 className="text-sm font-medium text-ice-300/70 mb-3">最近核销记录</h3>
+          <div className="max-h-[160px] overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-gray-900/95">
+                <tr className="text-ice-300/50 text-left">
+                  <th className="pb-2 font-medium">票号</th>
+                  <th className="pb-2 font-medium">票种</th>
+                  <th className="pb-2 font-medium">核销时间</th>
+                  <th className="pb-2 font-medium">闸机</th>
+                  <th className="pb-2 font-medium">结果</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ice-500/5">
+                {scanHistory.map((s, i) => (
+                  <tr key={i} className="text-ice-100">
+                    <td className="py-1.5 font-mono">{s.code}</td>
+                    <td>{s.type}</td>
+                    <td className="font-mono text-[10px]">{s.time}</td>
+                    <td>{s.gate}</td>
+                    <td>
+                      {s.status === "success" && <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">✓ 成功</span>}
+                      {s.status === "duplicate" && <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400">⚠ 重复</span>}
+                      {s.status === "failed" && <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-400">✗ 失败</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-4">
-        {[{ label: "总票数", value: total, accent: "border-sky-500/40", icon: <Ticket className="w-5 h-5" /> }, { label: "已使用", value: usedCount, accent: "border-slate-500/40", icon: <CheckCircle className="w-5 h-5" /> }, { label: "有效票", value: validCount, accent: "border-emerald-500/40", icon: <Ticket className="w-5 h-5" /> }].map((k) => (
+        {[{ label: "筛选结果", value: filteredTotal, accent: "border-sky-500/40", icon: <Ticket className="w-5 h-5" /> }, { label: "已使用", value: filteredUsed, accent: "border-slate-500/40", icon: <CheckCircle className="w-5 h-5" /> }, { label: "有效票", value: filteredValid, accent: "border-emerald-500/40", icon: <Ticket className="w-5 h-5" /> }].map((k) => (
           <div key={k.label} className={`glow-card flex items-center gap-4 border-l-2 ${k.accent}`}>
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-ice-500/10 text-ice-400">{k.icon}</div>
             <div>
@@ -135,19 +218,52 @@ export default function TicketPage() {
       </div>
 
       <div className="glow-card">
-        <h3 className="text-sm font-medium text-ice-300/70 mb-3">闸机验票记录</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-ice-300/70">闸机验票记录</h3>
+          <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-1.5 text-xs text-ice-400 hover:text-ice-300 transition-colors px-2 py-1 rounded border border-ice-500/20 hover:border-ice-500/40">
+            <Filter className="w-3 h-3" />{showFilter ? "收起" : "筛选"}
+          </button>
+        </div>
+
+        {showFilter && (
+          <div className="mb-3 p-3 rounded-lg bg-frost-surface/50 border border-ice-500/10 space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ice-300/30" />
+                <input type="text" value={filterCode} onChange={(e) => setFilterCode(e.target.value)} placeholder="搜索票号..." className="w-full pl-8 pr-3 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-xs text-ice-100 placeholder:text-ice-300/30 focus:outline-none focus:border-ice-400/40 font-mono" />
+              </div>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-2 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-xs text-ice-100 focus:outline-none">
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s === "全部" ? "全部状态" : statusLabel[s]}</option>)}
+              </select>
+              <select value={filterGate} onChange={(e) => setFilterGate(e.target.value)} className="px-2 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-xs text-ice-100 focus:outline-none">
+                {GATE_OPTIONS.map((g) => <option key={g} value={g}>{g === "全部" ? "全部闸机" : g}</option>)}
+              </select>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="px-2 py-1.5 bg-gray-900/60 border border-ice-500/15 rounded text-xs text-ice-100 focus:outline-none">
+                {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t === "全部" ? "全部票种" : typeLabel[t]}</option>)}
+              </select>
+            </div>
+            <div className="text-[10px] text-ice-300/30">找到 {filtered.length} 条记录（共 {tickets.length} 条）</div>
+          </div>
+        )}
+
         <div className="max-h-[240px] overflow-y-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-gray-900/95">
-              <tr className="text-ice-300/50 text-left"><th className="pb-2 font-medium">编号</th><th className="pb-2 font-medium">类型</th><th className="pb-2 font-medium">时间</th><th className="pb-2 font-medium">闸机</th><th className="pb-2 font-medium">状态</th></tr>
+              <tr className="text-ice-300/50 text-left">
+                <th className="pb-2 font-medium">票号</th>
+                <th className="pb-2 font-medium">类型</th>
+                <th className="pb-2 font-medium">核销时间</th>
+                <th className="pb-2 font-medium">闸机</th>
+                <th className="pb-2 font-medium">状态</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-ice-500/5">
-              {tickets.slice(0, 20).map((t) => (
+              {filtered.slice(0, 30).map((t) => (
                 <tr key={t.id} className="text-ice-100">
-                  <td className="py-1.5 font-mono">{t.id}</td>
+                  <td className="py-1.5 font-mono">{t.code}</td>
                   <td>{typeLabel[t.type]}</td>
-                  <td className="font-mono">{t.timestamp}</td>
-                  <td>{t.gate}</td>
+                  <td className="font-mono text-[10px]">{t.status === "used" ? (t.usedAt || "-") : t.timestamp}</td>
+                  <td>{t.status === "used" ? (t.usedGate || t.gate) : t.gate}</td>
                   <td><span className={`px-1.5 py-0.5 rounded text-[10px] ${statusStyle[t.status]}`}>{statusLabel[t.status]}</span></td>
                 </tr>
               ))}
