@@ -58,6 +58,49 @@ export interface TicketRecord {
   usedGate?: string
 }
 
+export interface ScanLogEntry {
+  id: string
+  code: string
+  gate: string
+  timestamp: string
+  result: "success" | "duplicate" | "not_found" | "expired"
+  notes?: string
+}
+
+export interface ShiftSnapshot {
+  id: string
+  shift: "morning" | "afternoon" | "evening"
+  date: string
+  generatedAt: string
+  generatedBy: string
+  totalScans: number
+  successCount: number
+  duplicateCount: number
+  failedCount: number
+  byGate: Record<string, { total: number; success: number; duplicate: number; failed: number }>
+  byType: Record<string, { total: number; success: number; duplicate: number; failed: number }>
+  failedTickets: { code: string; reason: string; lastGate?: string; lastTime?: string }[]
+  notes: string
+  nextShiftNotes?: string
+  confirmedBy?: string
+  confirmedAt?: string
+}
+
+export interface AlertHandover {
+  id: string
+  date: string
+  shift: "morning" | "afternoon" | "evening"
+  generatedAt: string
+  generatedBy: string
+  pendingAlerts: string[]
+  resolvedToday: string[]
+  summary: string
+  handoverNotes: string
+  confirmedBy?: string
+  confirmedAt?: string
+  successorNotes?: string
+}
+
 export interface RentalItem {
   id: string
   type: "ski" | "snowboard" | "helmet" | "suit"
